@@ -27,7 +27,7 @@ STEP = 1024                             # prompt rows a prefill step takes while
 GROW = 8192                             # rows a stream's attention caches grow by at a time (one GPU)
 GIB = 1024**3
 TIMED = 16                              # the last rounds whose time beside the forward sets a stream count's overhead
-DEPTH_CHIPS = ((12, 0),)                # tuned planning (measured overhead, curve steps, the block); else 0.6.0's
+DEPTH_CHIPS = ((12, 0), (12, 1))        # tuned planning (measured overhead, curve steps, the block); else 0.6.0's
 BATCH = True                            # queued foreground prompts' steps share one prefill forward
 
 

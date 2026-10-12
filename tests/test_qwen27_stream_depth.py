@@ -73,16 +73,16 @@ def test_other_gpus_plan_on_the_prior_and_the_old_curve(allocations, monkeypatch
     dec = decoder(multi, monkeypatch, [3, 2], CURVE)
     dec.spent = {2: [1.0] * 8}
     assert dec._overhead(2) == 1.0
-    dec.depth = False                                            # a GB10 or an unmeasured GPU
+    dec.depth = False                                            # an unmeasured GPU
     assert dec._overhead(2) == 11.0
     assert not {17, 33, 65} & set(multi.calibration_rows(4, False)) and 17 in multi.calibration_rows(4)
 
 
 def test_other_gpus_draft_every_level(allocations, monkeypatch):  # noqa: F811
     multi = importlib.import_module("tensorfold.families.qwen3_5.cuda.multi")
-    assert (12, 0) in multi.DEPTH_CHIPS and (12, 1) not in multi.DEPTH_CHIPS
+    assert (12, 0) in multi.DEPTH_CHIPS and (8, 9) not in multi.DEPTH_CHIPS
     dec = decoder(multi, monkeypatch, [3, 2])
-    dec.depth = False                                            # a GB10 or an unmeasured GPU
+    dec.depth = False                                            # an unmeasured GPU
     dec._verify(plan(dec), {})
     dec._verify(plan(dec), {})
     assert dec.draft.blocks == [16, 16]
@@ -103,6 +103,26 @@ def test_a_cpu_stand_in_on_a_gpu_machine_plans_as_on_a_host_box(allocations, mon
     monkeypatch.setattr(multi.torch.cuda, "is_available", lambda: True)
     monkeypatch.setattr(multi.torch.cuda, "get_device_capability", capability)
     assert multi.MultiDecoder(stand_in("cuda:0"), None, world=2).depth       # two ranks: no memory gate to build
+    dec = multi.MultiDecoder(stand_in("cpu"), None)
+    assert not dec.depth and dec.memory_gate is None
+
+
+@pytest.mark.parametrize("capability,expected", [((12, 0), True), ((12, 1), True), ((8, 9), False)])
+def test_only_the_measured_chips_get_tuned_planning(allocations, monkeypatch, capability, expected):  # noqa: F811
+    multi = importlib.import_module("tensorfold.families.qwen3_5.cuda.multi")
+
+    def cap(device):
+        if multi.torch.device(device).type != "cuda":
+            raise ValueError(f"Expected a cuda device, but got: {device}")
+        return capability
+
+    def stand_in(device):
+        return SimpleNamespace(config=SimpleNamespace(eos=(0,), vocab=10), norm=SimpleNamespace(device=device),
+                               head=SimpleNamespace(n=10))
+
+    monkeypatch.setattr(multi.torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(multi.torch.cuda, "get_device_capability", cap)
+    assert multi.MultiDecoder(stand_in("cuda:0"), None, world=2).depth is expected
     dec = multi.MultiDecoder(stand_in("cpu"), None)
     assert not dec.depth and dec.memory_gate is None
 
